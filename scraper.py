@@ -116,8 +116,8 @@ def scrape(yesterday: str) -> list[list]:
             ).first
             search_btn.click()
 
-            # 결과 테이블 대기 (달력 테이블 제외, antd 데이터 테이블 기준)
-            page.wait_for_selector(".ant-table-tbody tr, .ant-table-row", timeout=20000)
+            # AG Grid 데이터 행 대기
+            page.wait_for_selector(".ag-center-cols-container .ag-row", timeout=20000)
             time.sleep(2)
 
             # 6) 테이블 데이터 추출
@@ -190,61 +190,27 @@ def _set_date(page, date_str: str):
 
 
 def _extract_table(page, date_str: str) -> list[list]:
-    """테이블에서 모든 행 추출. [날짜, CD, 광고명, OS, 광고타입, 광고단가, 조회수, 클릭수, 전환수, 전환율, 광고비]"""
-    rows_data = []
-
-    # JavaScript로 테이블 데이터 추출 (ant-picker-content 제외)
+    """AG Grid 테이블에서 행 추출. [날짜, CD, 광고명, OS, 광고타입, 광고단가, 조회수, 클릭수, 전환수, 전환율, 광고비]"""
     js_result = page.evaluate("""
         () => {
-            // 달력 팝업 테이블 제외하고 데이터 테이블만 선택
-            const tables = Array.from(document.querySelectorAll('table')).filter(t =>
-                !t.closest('.ant-picker-dropdown') &&
-                !t.classList.contains('ant-picker-content')
-            );
-            if (!tables.length) return [];
-
-            // 가장 많은 행을 가진 테이블 선택
-            let target = tables[0];
-            for (const t of tables) {
-                if (t.querySelectorAll('tbody tr').length > target.querySelectorAll('tbody tr').length) {
-                    target = t;
-                }
+            const pinnedRows = document.querySelectorAll('.ag-pinned-left-cols-container .ag-row');
+            const centerRows = document.querySelectorAll('.ag-center-cols-container .ag-row');
+            const result = [];
+            for (let i = 0; i < centerRows.length; i++) {
+                const leftCells = pinnedRows[i]
+                    ? Array.from(pinnedRows[i].querySelectorAll('.ag-cell')).map(c => c.innerText.trim())
+                    : [];
+                const centerCells = Array.from(centerRows[i].querySelectorAll('.ag-cell')).map(c => c.innerText.trim());
+                const row = [...leftCells, ...centerCells];
+                if (row.some(c => c !== '')) result.push(row);
             }
-
-            const rows = [];
-            target.querySelectorAll('tbody tr').forEach(tr => {
-                const cells = [];
-                tr.querySelectorAll('td').forEach(td => {
-                    cells.push(td.innerText.trim());
-                });
-                if (cells.length > 0) rows.push(cells);
-            });
-            return rows;
+            return result;
         }
     """)
 
-    if not js_result:
-        # antd / el-table 등 가상 테이블 대응 (달력 제외)
-        js_result = page.evaluate("""
-            () => {
-                const rows = [];
-                const rowEls = document.querySelectorAll(
-                    '.ant-table-tbody tr, .el-table__body tr'
-                );
-                rowEls.forEach(tr => {
-                    const cells = [];
-                    tr.querySelectorAll('td').forEach(td => {
-                        cells.push(td.innerText.trim());
-                    });
-                    if (cells.length > 0) rows.push(cells);
-                });
-                return rows;
-            }
-        """)
-
-    for row in js_result:
-        if row and any(cell.strip() for cell in row):
-            rows_data.append([date_str] + row)
+    rows_data = []
+    for row in (js_result or []):
+        rows_data.append([date_str] + row)
 
     return rows_data
 
