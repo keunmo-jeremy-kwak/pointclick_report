@@ -116,8 +116,8 @@ def scrape(yesterday: str) -> list[list]:
             ).first
             search_btn.click()
 
-            # 결과 테이블 대기
-            page.wait_for_selector("table, .ant-table, .el-table, [role='table']", timeout=20000)
+            # 결과 테이블 대기 (달력 테이블 제외, antd 데이터 테이블 기준)
+            page.wait_for_selector(".ant-table-tbody tr, .ant-table-row", timeout=20000)
             time.sleep(2)
 
             # 6) 테이블 데이터 추출
@@ -152,25 +152,40 @@ def _set_date(page, date_str: str):
 
     # 2) antd RangePicker: 시작일 입력
     start_input = page.locator(".ant-picker-input input").first
-    start_input.click(click_count=3)
+    start_input.click()
+    time.sleep(0.5)
+    start_input.press("Control+a")
+    start_input.press("Backspace")
+    time.sleep(0.2)
+    start_input.type(date_str, delay=50)
     time.sleep(0.3)
-    start_input.fill(date_str)
     page.keyboard.press("Enter")
     time.sleep(0.5)
 
-    # 3) 종료일 입력 (팝업이 자동으로 종료일로 이동)
+    # 3) 종료일 입력
     end_input = page.locator(".ant-picker-input input").last
-    end_input.click(click_count=3)
+    end_input.click()
     time.sleep(0.3)
-    end_input.fill(date_str)
+    end_input.press("Control+a")
+    end_input.press("Backspace")
+    time.sleep(0.2)
+    end_input.type(date_str, delay=50)
+    time.sleep(0.3)
     page.keyboard.press("Enter")
-    time.sleep(0.5)
+    time.sleep(0.8)
 
-    # 4) 달력 팝업이 닫힐 때까지 대기
-    page.keyboard.press("Escape")
-    time.sleep(1)
-    # 팝업이 완전히 사라질 때까지 대기
-    page.wait_for_selector(".ant-picker-dropdown", state="hidden", timeout=5000)
+    # 4) 달력 팝업 닫기
+    try:
+        page.wait_for_selector(".ant-picker-dropdown", state="hidden", timeout=3000)
+    except Exception:
+        page.keyboard.press("Escape")
+        time.sleep(0.5)
+        try:
+            page.wait_for_selector(".ant-picker-dropdown", state="hidden", timeout=3000)
+        except Exception:
+            page.mouse.click(100, 400)
+            time.sleep(1)
+
     print(f"[INFO] 날짜 설정 완료: {date_str} ~ {date_str}")
 
 
