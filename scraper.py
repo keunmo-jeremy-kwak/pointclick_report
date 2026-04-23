@@ -136,33 +136,30 @@ def scrape(yesterday: str) -> list[list]:
 
 
 def _set_date(page, date_str: str):
-    """날짜 입력 필드에 값 설정. 다양한 날짜 피커 패턴 대응."""
+    """날짜 입력 필드에 값 설정. 시작일/종료일 모두 yesterday로 설정."""
 
-    # 일반 date input
+    # 1) 일반 date input
     date_inputs = page.locator("input[type='date']").all()
     if date_inputs:
         for inp in date_inputs:
             inp.fill(date_str)
         return
 
-    # 텍스트 input (YYYY-MM-DD 형식)
-    text_date_inputs = page.locator(
-        "input[placeholder*='날짜'], input[placeholder*='date'], "
+    # 2) antd RangePicker / 일반 DatePicker input
+    date_pickers = page.locator(
+        ".ant-picker input, .ant-picker-input input, "
+        ".el-date-editor input, input[placeholder*='날짜'], "
         "input[placeholder*='YYYY'], input[placeholder*='yyyy']"
     ).all()
-    if text_date_inputs:
-        for inp in text_date_inputs[:2]:  # 시작~종료 최대 2개
-            inp.triple_click()
-            inp.fill(date_str)
-        return
-
-    # antd DatePicker 패턴
-    date_pickers = page.locator(".ant-picker input, .el-date-editor input").all()
     if date_pickers:
-        for inp in date_pickers[:2]:
-            inp.triple_click()
+        for inp in date_pickers[:2]:  # 시작일, 종료일 최대 2개
+            inp.click(click_count=3)
             inp.fill(date_str)
-            page.keyboard.press("Enter")
+            page.keyboard.press("Tab")
+            time.sleep(0.5)
+        # 달력 팝업 닫기
+        page.keyboard.press("Escape")
+        time.sleep(0.5)
         return
 
     print("[WARN] 날짜 입력 필드를 찾지 못했습니다. 수동 셀렉터 확인 필요.")
