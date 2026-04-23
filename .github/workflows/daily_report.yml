@@ -5,6 +5,11 @@ on:
     # 매일 오전 6시 KST = 21:00 UTC (전날)
     - cron: "0 21 * * *"
   workflow_dispatch:  # 수동 실행 버튼
+    inputs:
+      test_date:
+        description: '테스트 날짜 (YYYY-MM-DD, 비워두면 전날 자동)'
+        required: false
+        default: ''
 
 jobs:
   scrape:
@@ -40,6 +45,7 @@ jobs:
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
           ADMIN_PW: ${{ secrets.ADMIN_PW }}
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          TEST_DATE: ${{ github.event.inputs.test_date }}
         run: python scraper.py
 
       - name: 오류 스크린샷 업로드 (실패 시)
