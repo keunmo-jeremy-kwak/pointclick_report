@@ -41,15 +41,20 @@ def get_sheet():
 
 
 def append_rows(sheet, rows: list[list]):
-    """시트에 행 추가. 헤더가 없으면 먼저 삽입."""
+    """시트에 행 추가. 헤더가 없으면 먼저 삽입. ChannelName 수식 자동 추가."""
     existing = sheet.get_all_values()
     if not existing:
         header = ["날짜", "CD", "광고명", "OS", "광고 타입",
-                  "광고 단가", "조회수", "클릭수", "전환수", "전환율", "광고비"]
-        sheet.append_row(header)
+                  "광고 단가", "조회수", "클릭수", "전환수", "전환율", "광고비", "ChannelName"]
+        sheet.append_row(header, value_input_option="USER_ENTERED")
 
     for row in rows:
-        sheet.append_row(row)
+        # 다음 행 번호 계산 (수식에 사용)
+        next_row = len(sheet.get_all_values()) + 1
+        # ChannelName VLOOKUP 수식 추가 (CD는 B열)
+        channel_formula = f"=iferror(vlookup(B{next_row},'채널정보'!$A$5:$D$1002,4,false),\"\")"
+        sheet.append_row(row + [channel_formula], value_input_option="USER_ENTERED")
+
     print(f"[INFO] {len(rows)}행 저장 완료")
 
 
@@ -136,7 +141,7 @@ def scrape(yesterday: str) -> list[list]:
 
 
 def _set_date(page, date_str: str):
-    """날짜 입력 필드에 값 설정. 시작일/종료일 모두 yesterday로 설정."""
+    """날짜 입력 필드에 값 설정. antd RangePicker 기준."""
 
     # 1) 일반 date input
     date_inputs = page.locator("input[type='date']").all()
@@ -145,34 +150,42 @@ def _set_date(page, date_str: str):
             inp.fill(date_str)
         return
 
-    # 2) antd RangePicker / 일반 DatePicker input
-    date_pickers = page.locator(
-        ".ant-picker input, .ant-picker-input input, "
-        ".el-date-editor input, input[placeholder*='날짜'], "
-        "input[placeholder*='YYYY'], input[placeholder*='yyyy']"
-    ).all()
-    if date_pickers:
-        for inp in date_pickers[:2]:  # 시작일, 종료일 최대 2개
-            inp.click(click_count=3)
-            inp.fill(date_str)
-            page.keyboard.press("Tab")
-            time.sleep(0.5)
-        # 달력 팝업 닫기
-        page.keyboard.press("Escape")
-        time.sleep(0.5)
-        return
+    # 2) antd RangePicker: 시작일 입력
+    start_input = page.locator(".ant-picker-input input").first
+    start_input.click(click_count=3)
+    time.sleep(0.3)
+    start_input.fill(date_str)
+    page.keyboard.press("Enter")
+    time.sleep(0.5)
 
-    print("[WARN] 날짜 입력 필드를 찾지 못했습니다. 수동 셀렉터 확인 필요.")
+    # 3) 종료일 입력 (팝업이 자동으로 종료일로 이동)
+    end_input = page.locator(".ant-picker-input input").last
+    end_input.click(click_count=3)
+    time.sleep(0.3)
+    end_input.fill(date_str)
+    page.keyboard.press("Enter")
+    time.sleep(0.5)
+
+    # 4) 달력 팝업이 닫힐 때까지 대기
+    page.keyboard.press("Escape")
+    time.sleep(1)
+    # 팝업이 완전히 사라질 때까지 대기
+    page.wait_for_selector(".ant-picker-dropdown", state="hidden", timeout=5000)
+    print(f"[INFO] 날짜 설정 완료: {date_str} ~ {date_str}")
 
 
 def _extract_table(page, date_str: str) -> list[list]:
     """테이블에서 모든 행 추출. [날짜, CD, 광고명, OS, 광고타입, 광고단가, 조회수, 클릭수, 전환수, 전환율, 광고비]"""
     rows_data = []
 
-    # JavaScript로 테이블 데이터 추출 (thead 제외, tbody tr)
+    # JavaScript로 테이블 데이터 추출 (ant-picker-content 제외)
     js_result = page.evaluate("""
         () => {
-            const tables = document.querySelectorAll('table');
+            // 달력 팝업 테이블 제외하고 데이터 테이블만 선택
+            const tables = Array.from(document.querySelectorAll('table')).filter(t =>
+                !t.closest('.ant-picker-dropdown') &&
+                !t.classList.contains('ant-picker-content')
+            );
             if (!tables.length) return [];
 
             // 가장 많은 행을 가진 테이블 선택
@@ -196,16 +209,16 @@ def _extract_table(page, date_str: str) -> list[list]:
     """)
 
     if not js_result:
-        # antd / el-table 등 가상 테이블 대응
+        # antd / el-table 등 가상 테이블 대응 (달력 제외)
         js_result = page.evaluate("""
             () => {
                 const rows = [];
                 const rowEls = document.querySelectorAll(
-                    '.ant-table-tbody tr, .el-table__body tr, [role="row"]'
+                    '.ant-table-tbody tr, .el-table__body tr'
                 );
                 rowEls.forEach(tr => {
                     const cells = [];
-                    tr.querySelectorAll('td, [role="cell"], .cell').forEach(td => {
+                    tr.querySelectorAll('td').forEach(td => {
                         cells.push(td.innerText.trim());
                     });
                     if (cells.length > 0) rows.push(cells);
