@@ -33,29 +33,29 @@ print(f"[INFO] 조회 날짜: {yesterday}")
 # ─── Google Sheets 연결 ────────────────────────────────────────────────────────
 def get_sheet():
     creds_dict = json.loads(GCP_CREDS_JSON)
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    gc = gspread.authorize(creds)
-    return gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    # gspread 최신 방식으로 인증
+    gc = gspread.service_account_from_dict(creds_dict)
+    sheet = gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    print(f"[INFO] 시트 연결 성공: {sheet.title} (행 수: {sheet.row_count})")
+    return sheet
 
 
 def append_rows(sheet, rows: list[list]):
     """시트에 행 추가. 헤더가 없으면 먼저 삽입. ChannelName 수식 자동 추가."""
     existing = sheet.get_all_values()
+    print(f"[INFO] 현재 시트 데이터: {len(existing)}행")
+
     if not existing:
         header = ["날짜", "CD", "광고명", "OS", "광고 타입",
                   "광고 단가", "조회수", "클릭수", "전환수", "전환율", "광고비", "ChannelName"]
         sheet.append_row(header, value_input_option="USER_ENTERED")
+        print("[INFO] 헤더 추가 완료")
 
-    for row in rows:
-        # 다음 행 번호 계산 (수식에 사용)
+    for i, row in enumerate(rows):
         next_row = len(sheet.get_all_values()) + 1
-        # ChannelName VLOOKUP 수식 추가 (CD는 B열)
         channel_formula = f"=iferror(vlookup(B{next_row},'채널정보'!$A$5:$D$1002,4,false),\"\")"
         sheet.append_row(row + [channel_formula], value_input_option="USER_ENTERED")
+        print(f"[INFO] {i+1}번 행 저장 → 시트 {next_row}행: {row[:2]}")
 
     print(f"[INFO] {len(rows)}행 저장 완료")
 
