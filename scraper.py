@@ -41,23 +41,28 @@ def get_sheet():
 
 
 def append_rows(sheet, rows: list[list]):
-    """시트에 행 추가. 헤더가 없으면 먼저 삽입. ChannelName 수식 자동 추가."""
+    """시트에 행 추가. 헤더가 없으면 먼저 삽입. 전체 배치로 한 번에 저장."""
     existing = sheet.get_all_values()
-    print(f"[INFO] 현재 시트 데이터: {len(existing)}행")
+    current_row_count = len(existing)
+    print(f"[INFO] 현재 시트 데이터: {current_row_count}행")
 
     if not existing:
         header = ["날짜", "CD", "광고명", "OS", "광고 타입",
                   "광고 단가", "조회수", "클릭수", "전환수", "전환율", "광고비", "ChannelName"]
         sheet.append_row(header, value_input_option="USER_ENTERED")
+        current_row_count = 1
         print("[INFO] 헤더 추가 완료")
 
+    # 모든 행의 수식을 미리 계산 후 한 번에 저장 (Race Condition 방지)
+    batch = []
     for i, row in enumerate(rows):
-        next_row = len(sheet.get_all_values()) + 1
+        next_row = current_row_count + 1 + i
         channel_formula = f"=iferror(vlookup(B{next_row},'채널정보'!$A$5:$D$1002,4,false),\"\")"
-        sheet.append_row(row + [channel_formula], value_input_option="USER_ENTERED")
-        print(f"[INFO] {i+1}번 행 저장 → 시트 {next_row}행: {row[:2]}")
+        batch.append(row + [channel_formula])
+        print(f"[INFO] {i+1}번 행 준비 → 시트 {next_row}행: {row[:2]}")
 
-    print(f"[INFO] {len(rows)}행 저장 완료")
+    sheet.append_rows(batch, value_input_option="USER_ENTERED")
+    print(f"[INFO] {len(rows)}행 일괄 저장 완료")
 
 
 # ─── Playwright 자동화 ─────────────────────────────────────────────────────────
