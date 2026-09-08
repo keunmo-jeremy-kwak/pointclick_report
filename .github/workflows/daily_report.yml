@@ -5,6 +5,11 @@ on:
     # 매일 오전 6시 KST = 21:00 UTC (전날)
     - cron: "0 21 * * *"
   workflow_dispatch:  # 수동 실행 버튼
+    inputs:
+      target_date:
+        description: "조회할 날짜 (YYYY-MM-DD). 비워두면 어제 날짜로 실행"
+        required: false
+        type: string
 
 jobs:
   scrape:
@@ -40,6 +45,7 @@ jobs:
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
           ADMIN_PW: ${{ secrets.ADMIN_PW }}
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          TARGET_DATE: ${{ github.event.inputs.target_date }}
         run: python scraper.py
 
       - name: 오류 스크린샷 업로드 (실패 시)

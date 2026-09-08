@@ -23,10 +23,11 @@ SPREADSHEET_ID = "1KeWHUVjAleAf0wz_bbr1y-MeWDDI05P06riC1nCoGzE"
 SHEET_NAME     = "Report"
 GCP_CREDS_JSON = os.environ["GCP_CREDENTIALS"]  # 서비스 계정 JSON 문자열
 
-# 날짜 (전날, KST 기준)
+# 날짜 (기본: 전날, KST 기준. TARGET_DATE 지정 시 해당 날짜로 백필)
 from datetime import timezone
 KST = timezone(timedelta(hours=9))
-yesterday = (datetime.now(tz=KST) - timedelta(days=1)).strftime("%Y-%m-%d")
+TARGET_DATE = os.environ.get("TARGET_DATE", "").strip()
+yesterday = TARGET_DATE or (datetime.now(tz=KST) - timedelta(days=1)).strftime("%Y-%m-%d")
 print(f"[INFO] 조회 날짜: {yesterday}")
 
 
